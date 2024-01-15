@@ -5,8 +5,10 @@ import matplotlib.pyplot as plt
 import math
 import networkx as nx
 import numpy as np
-from torch_geometric.data import InMemoryDataset
+from torch_geometric.data import InMemoryDataset, Data
+import torch_geometric.transforms as T
 
+"""
 ### Create dataframe from dataset ###
 df = pd.read_csv("May 4th Dataset Car and Tower  - Sheet1 (1).csv")
 df.reset_index(drop=True, inplace=True)
@@ -43,6 +45,30 @@ X = df[['X', 'Y']].values
 pos = dict(zip(range(len(df)), X))
 nx.draw(G, pos, node_size=15, node_color='blue', edge_color='white')
 plt.show()
+"""
+
+### Testing Parameters ###
+root = './'
+filename = 'May 4th Dataset Car and Tower  - Sheet1 (1).csv'
+
+num_clusters = 20
+n = 1000  # epochs?
+clusters = []
+
+max_dist = 500
+
+# Transform Parameters
+transform_set = False
+value_num = 0.1
+test_num = 0.2
+
+# Optimizer Parameters (learning rate)
+learn_rate = 0.9
+
+# Number of iterations/generations of the training dataset
+epochs = n
+
+# Colour setup?
 
 
 class MyDataset(InMemoryDataset):
@@ -60,7 +86,7 @@ class MyDataset(InMemoryDataset):
         return ['data.pt']
 
     def download(self):
-        from_path = osp.join(root, filename)
+        from_path = osp.join(self.root, self.filename)
         to_path = osp.join(self.raw_dir, self.filename)
         df = pd.read_csv(from_path)
         df.reset_index(drop=True, inplace=True)
@@ -79,11 +105,40 @@ class MyDataset(InMemoryDataset):
         df = self.read_file()
         x = torch.from_numpy(df.values).float()
 
+        edge_source = []
+        edge_target = []
+
         for i in range(len(df)):
-            for j in range(len(df)):
-                if i == j:
+            for j in range(i + 1, len(df)):
+                dist = math.dist([df.loc[i, 'X'], df.loc[i, 'Y']], [df.loc[j, 'X'], df.loc[j, 'Y']])
 
-# root = './'
-# filename = 'May 4th Dataset Car and Tower  - Sheet1 (1).csv'
+                if 0 < dist <= max_dist:
+                    edge_source.append(i)
+                    edge_target.append(j)
+
+        data = Data(
+            x=x,
+            edge_index=torch.tensor([edge_source, edge_target])
+        )
+        torch.save(data, self.processed_paths[0])
 
 
+transform = T.RandomLinkSplit(
+    num_val=value_num, num_test=test_num,
+    is_undirected=True,
+    split_labels=True
+)
+
+if transform_set:
+    dataset = MyDataset(root, filename, transform=T.NormalizeFeatures)
+else:
+    dataset = MyDataset(root, filename)
+
+data = dataset[0]
+
+train_data, val_data, test_data = transform(data)
+
+print('Dataset:', dataset)
+print('Data:', data)
+print('Train data:', train_data)
+print('Test data:', test_data)
